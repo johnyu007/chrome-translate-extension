@@ -84,6 +84,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     saveCapturedText(text).then(() => {
       notifySidePanel({ type: 'TEXT_CAPTURED', text });
     });
+    // 在扩展图标上显示 ✓ 标记，给用户视觉反馈
+    chrome.action.setBadgeText({ text: '✓' });
+    chrome.action.setBadgeBackgroundColor({ color: '#1a73e8' });
+    // 3 秒后清除标记
+    setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
     sendResponse({ success: true });
   }
   return true;

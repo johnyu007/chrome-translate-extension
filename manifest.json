@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 翻译助手",
   "version": "1.0.0",
-  "description": "基于 AI 模型的网页实时翻译扩展，复制文本自动翻译。支持 OpenAI 兼容接口（DeepSeek、Ollama、Groq 等），翻译结果以侧边栏形式呈现。"
+  "description": "基于 AI 模型的网页实时翻译扩展，复制文本自动翻译。支持 OpenAI 兼容接口（DeepSeek、Ollama、Groq 等），翻译结果以侧边栏形式呈现。",
   "permissions": [
     "sidePanel",
     "storage",

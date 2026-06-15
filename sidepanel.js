@@ -27,8 +27,27 @@ let isTranslating = false;
 let settings = null;
 let port = null;
 
+// ── 设置加载（从 storage 直读，避免后台往返的时序问题）──
+async function loadSettingsFromStorage() {
+  const data = await chrome.storage.local.get('settings');
+  settings = data.settings || {};
+  applySettings();
+  return settings;
+}
+
 // ── 初始化连接 ──────────────────────────────────────
-function connectToBackground() {
+async function connectToBackground() {
+  // 先加载设置，再建立连接（确保收到 TEXT_CAPTURED 时 settings 已就绪）
+  await loadSettingsFromStorage();
+
+  // 监外设置变更
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.settings) {
+      settings = changes.settings.newValue || {};
+      applySettings();
+    }
+  });
+
   port = chrome.runtime.connect({ name: 'sidepanel' });
 
   port.onMessage.addListener((msg) => {
@@ -45,10 +64,6 @@ function connectToBackground() {
       case 'TRANSLATION_ERROR':
         showError(msg.error);
         break;
-      case 'SETTINGS_LOADED':
-        settings = msg.settings;
-        applySettings();
-        break;
       case 'SETTINGS_SAVED':
         hideError();
         break;
@@ -57,7 +72,6 @@ function connectToBackground() {
 
   port.onDisconnect.addListener(() => {
     port = null;
-    // 尝试重连
     setTimeout(connectToBackground, 1000);
   });
 }
@@ -249,10 +263,3 @@ function showCopyFeedback() {
 
 // ── 启动 ────────────────────────────────────────────
 connectToBackground();
-
-// 请求加载设置
-setTimeout(() => {
-  if (port) {
-    port.postMessage({ type: 'GET_SETTINGS' });
-  }
-}, 100);

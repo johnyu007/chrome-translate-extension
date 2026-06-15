@@ -7,12 +7,10 @@ import { Translator, getLanguageName } from './lib/translator.js';
 import { openaiProvider } from './lib/providers/openai.js';
 
 // ── 状态 ────────────────────────────────────────────
-let latestCapturedText = null;
 let sidePanelPort = null;
 
 // ── 初始化 ──────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
-  // 注册右键菜单
   chrome.contextMenus.create({
     id: 'translate-selection',
     title: '翻译选中文本',
@@ -23,15 +21,13 @@ chrome.runtime.onInstalled.addListener(() => {
 // ── 右键菜单点击 ────────────────────────────────────
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'translate-selection' && info.selectionText) {
-    latestCapturedText = info.selectionText.trim();
-    // 打开侧边栏
+    await saveCapturedText(info.selectionText.trim());
     await chrome.sidePanel.open({ tabId: tab.id });
-    // 通知侧边栏
-    notifySidePanel({ type: 'TEXT_CAPTURED', text: latestCapturedText });
+    notifySidePanel({ type: 'TEXT_CAPTURED', text: info.selectionText.trim() });
   }
 });
 
-// ── 监听扩展图标点击（打开侧边栏） ──────────────────
+// ── 监听扩展图标点击 ────────────────────────────────
 chrome.action.onClicked.addListener(async (tab) => {
   await chrome.sidePanel.open({ tabId: tab.id });
 });
@@ -41,10 +37,12 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'sidepanel') {
     sidePanelPort = port;
 
-    // 如果有待翻译的文本，发送给侧边栏
-    if (latestCapturedText) {
-      port.postMessage({ type: 'TEXT_CAPTURED', text: latestCapturedText });
-    }
+    // 连接建立后，发送之前缓存的文本
+    loadCapturedText().then(text => {
+      if (text) {
+        port.postMessage({ type: 'TEXT_CAPTURED', text });
+      }
+    });
 
     port.onMessage.addListener(async (msg) => {
       switch (msg.type) {
@@ -61,7 +59,7 @@ chrome.runtime.onConnect.addListener((port) => {
           break;
 
         case 'CLEAR_CAPTURED':
-          latestCapturedText = null;
+          await clearCapturedText();
           break;
       }
     });
@@ -75,11 +73,14 @@ chrome.runtime.onConnect.addListener((port) => {
 // ── Content Script 消息 ─────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TEXT_CAPTURED' && msg.text) {
-    latestCapturedText = msg.text.trim();
-    notifySidePanel({ type: 'TEXT_CAPTURED', text: latestCapturedText });
+    const text = msg.text.trim();
+    // 持久化存储，防止 Service Worker 休眠丢失
+    saveCapturedText(text).then(() => {
+      notifySidePanel({ type: 'TEXT_CAPTURED', text });
+    });
     sendResponse({ success: true });
   }
-  return true; // 保持消息通道开放
+  return true;
 });
 
 // ── 翻译处理 ────────────────────────────────────────
@@ -115,11 +116,17 @@ async function handleTranslate(port, msg) {
 // ── 设置读写 ────────────────────────────────────────
 async function handleGetSettings(port) {
   const settings = await loadSettings();
-  // 不暴露 API Key 明文给侧边栏获取（仅在保存时写入）
-  port.postMessage({ type: 'SETTINGS_LOADED', settings });
+  // 不返回 API Key——仅保存时可写入，读取时脱敏
+  const safe = { ...settings, apiKey: settings.apiKey ? '••••••••' : '' };
+  port.postMessage({ type: 'SETTINGS_LOADED', settings: safe });
 }
 
 async function handleSaveSettings(port, newSettings) {
+  // 如果 API Key 是脱敏占位符，保留旧值
+  if (newSettings.apiKey === '••••••••') {
+    const old = await loadSettings();
+    newSettings.apiKey = old.apiKey;
+  }
   await chrome.storage.local.set({ settings: newSettings });
   port.postMessage({ type: 'SETTINGS_SAVED', success: true });
 }
@@ -138,6 +145,24 @@ function getDefaultSettings() {
     autoTranslate: true,
     systemPrompt: '',
   };
+}
+
+// ── 捕获文本的持久化 ────────────────────────────────
+async function saveCapturedText(text) {
+  await chrome.storage.local.set({ capturedText: text, capturedTime: Date.now() });
+}
+
+async function loadCapturedText() {
+  const data = await chrome.storage.local.get(['capturedText', 'capturedTime']);
+  // 超过 10 分钟的缓存视为过期
+  if (data.capturedText && Date.now() - (data.capturedTime || 0) < 10 * 60 * 1000) {
+    return data.capturedText;
+  }
+  return null;
+}
+
+async function clearCapturedText() {
+  await chrome.storage.local.remove(['capturedText', 'capturedTime']);
 }
 
 // ── 辅助 ────────────────────────────────────────────

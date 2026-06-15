@@ -26,6 +26,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 let isTranslating = false;
 let settings = null;
 let port = null;
+let lastAutoTranslatedText = '';  // 防止重复翻译同一文本
 
 // ── 设置加载（从 storage 直读，避免后台往返的时序问题）──
 async function loadSettingsFromStorage() {
@@ -35,18 +36,18 @@ async function loadSettingsFromStorage() {
   return settings;
 }
 
+// ── 监外设置变更（仅注册一次，避免重连时重复添加）─────────
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.settings) {
+    settings = changes.settings.newValue || {};
+    applySettings();
+  }
+});
+
 // ── 初始化连接 ──────────────────────────────────────
 async function connectToBackground() {
   // 先加载设置，再建立连接（确保收到 TEXT_CAPTURED 时 settings 已就绪）
   await loadSettingsFromStorage();
-
-  // 监外设置变更
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.settings) {
-      settings = changes.settings.newValue || {};
-      applySettings();
-    }
-  });
 
   port = chrome.runtime.connect({ name: 'sidepanel' });
 
@@ -80,12 +81,23 @@ async function connectToBackground() {
 function handleCapturedText(text) {
   if (!text) return;
 
+  // 与上次自动翻译完全相同的文本，跳过（防止 Service Worker 重连时重复翻译）
+  if (text === lastAutoTranslatedText && lastAutoTranslatedText !== '') {
+    return;
+  }
+
   // 填充到输入框
   sourceTextEl.value = text;
   updateCharCount();
 
+  // 清除后台缓存（文本已在输入框中，重连不需要再次发送）
+  if (port) {
+    port.postMessage({ type: 'CLEAR_CAPTURED' });
+  }
+
   // 如果设置了自动翻译且 API Key 已配置且非翻译中状态
   if (settings?.autoTranslate && settings?.apiKey && !isTranslating) {
+    lastAutoTranslatedText = text;
     triggerTranslation();
   } else if (!settings?.apiKey) {
     // API Key 未配置时只显示原文
@@ -208,10 +220,13 @@ swapLangBtn.addEventListener('click', () => {
 // 清除按钮
 clearBtn.addEventListener('click', () => {
   sourceTextEl.value = '';
+  lastAutoTranslatedText = '';  // 重置，允许相同文本再次触发翻译
   updateCharCount();
   resultSection.style.display = 'none';
   hideError();
-  port.postMessage({ type: 'CLEAR_CAPTURED' });
+  if (port) {
+    port.postMessage({ type: 'CLEAR_CAPTURED' });
+  }
 });
 
 // 复制译文

@@ -388,3 +388,16 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-tertiary);
 }
+
+/* ── Firefox Popup 适配 ────────────────────────────── */
+.popup-mode {
+  min-width: 380px;
+  max-width: 500px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.popup-mode .source-textarea {
+  min-height: 80px;
+  max-height: 150px;
+}

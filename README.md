@@ -36,20 +36,31 @@
 
 ## 安装方式
 
-### 方式一：Chrome Web Store（推荐）
-
-> 暂未上架，计划中
-
-### 方式二：开发者模式加载
+### Chrome / Edge
 
 1. 下载本仓库代码
    ```bash
-   git clone https://github.com/你的用户名/chrome-translate-extension.git
+   git clone https://github.com/johnyu007/chrome-translate-extension.git
    ```
 2. 打开 Chrome，地址栏输入 `chrome://extensions/`
 3. 右上角开启 **开发者模式**
-4. 点击 **加载已解压的扩展程序**
-5. 选择项目目录
+4. 点击 **加载已解压的扩展程序** → 选择项目目录
+5. Edge 同理：`edge://extensions/` → 开发者模式 → 加载
+
+### Firefox
+
+Firefox 不支持 Chrome Side Panel API，扩展改用 **工具栏弹出窗口** 显示翻译面板（功能相同）。
+
+1. 下载本仓库代码
+2. 用 `manifest.firefox.json` 替换 `manifest.json`：
+   ```bash
+   cp manifest.firefox.json manifest.json
+   ```
+3. 打开 Firefox，地址栏输入 `about:debugging#/runtime/this-firefox`
+4. 点击 **临时载入附加组件** → 选择项目目录中的 `manifest.json`
+5. 点击工具栏扩展图标即可打开翻译窗口
+
+> 也可以直接用构建脚本打包：`python build.py firefox`，生成 `dist/ai-translate-firefox-v1.0.0.zip`，通过 `about:addons` → 齿轮 → 从文件安装。
 
 ## 配置指南
 

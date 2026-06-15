@@ -22,14 +22,20 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'translate-selection' && info.selectionText) {
     await saveCapturedText(info.selectionText.trim());
-    await chrome.sidePanel.open({ tabId: tab.id });
+    // Chrome/Edge: 打开侧边栏；Firefox: sidePanel 不存在则跳过
+    if (chrome.sidePanel) {
+      await chrome.sidePanel.open({ tabId: tab.id });
+    }
     notifySidePanel({ type: 'TEXT_CAPTURED', text: info.selectionText.trim() });
   }
 });
 
 // ── 监听扩展图标点击 ────────────────────────────────
 chrome.action.onClicked.addListener(async (tab) => {
-  await chrome.sidePanel.open({ tabId: tab.id });
+  // Chrome/Edge: 打开侧边栏；Firefox: popup 由 default_popup 自动弹出
+  if (chrome.sidePanel) {
+    await chrome.sidePanel.open({ tabId: tab.id });
+  }
 });
 
 // ── Side Panel 长连接 ──────────────────────────────
